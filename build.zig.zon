@@ -1,0 +1,19 @@
+.{
+    .name = .sorvi_doom,
+    .version = "0.0.0",
+    .fingerprint = 0xaff2eb2883fd9f10,
+    .dependencies = .{
+        .sorvi = .{
+            .path = "../sorvi",
+        },
+        .puredoom = .{
+            .url = "git+https://github.com/Daivuk/PureDOOM.git#c169e1148789a9bcecf4d69bdd249fcc7b6e4f80",
+            .hash = "N-V-__8AAEwKbwA3bm7TRWVuWgP9kB2mmta69_BKSGE0OdOd",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
