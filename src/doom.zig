@@ -19,12 +19,12 @@ comptime {
         .id = "org.sorvi.port.doom",
         .name = "doom",
         .version = "0.0.0",
-        .core_extensions = &.{.core_v1, .audio_v1, .video_v1},
+        .core_extensions = &.{.core_v1, .audio_v1, .video_v1, .kbm_v1},
         .frontend_extensions = &.{.core_v1, .mem_v1, .audio_v1, .raster_v1},
     });
 }
 
-// TODO: add input
+// TODO: add mouse input
 // TODO: add midi support
 //       might be interesting to have sorvi api for midi as well :thinking:
 
@@ -152,6 +152,163 @@ pub fn init(_: *@This()) !void {
 }
 
 pub fn deinit(_: *@This()) void {
+}
+
+fn toDoomKey(code: sorvi.kbm_v1.scancode_t) ?c.doom_key_t {
+    return switch (code) {
+        .tab => c.DOOM_KEY_TAB,
+        .enter => c.DOOM_KEY_ENTER,
+        .escape => c.DOOM_KEY_ESCAPE,
+        .space => c.DOOM_KEY_SPACE,
+        .apostrophe => c.DOOM_KEY_APOSTROPHE,
+        .kp_multiply => c.DOOM_KEY_MULTIPLY,
+        .comma => c.DOOM_KEY_COMMA,
+        .minus => c.DOOM_KEY_MINUS,
+        .period => c.DOOM_KEY_PERIOD,
+        .slash => c.DOOM_KEY_SLASH,
+        .@"0" => c.DOOM_KEY_0,
+        .@"1" => c.DOOM_KEY_1,
+        .@"2" => c.DOOM_KEY_2,
+        .@"3" => c.DOOM_KEY_3,
+        .@"4" => c.DOOM_KEY_4,
+        .@"5" => c.DOOM_KEY_5,
+        .@"6" => c.DOOM_KEY_6,
+        .@"7" => c.DOOM_KEY_7,
+        .@"8" => c.DOOM_KEY_8,
+        .@"9" => c.DOOM_KEY_9,
+        .semicolon => c.DOOM_KEY_SEMICOLON,
+        .equals => c.DOOM_KEY_EQUALS,
+        .square_bracket_open => c.DOOM_KEY_LEFT_BRACKET,
+        .square_bracket_close => c.DOOM_KEY_RIGHT_BRACKET,
+        .a => c.DOOM_KEY_A,
+        .b => c.DOOM_KEY_B,
+        .c => c.DOOM_KEY_C,
+        .d => c.DOOM_KEY_D,
+        .e => c.DOOM_KEY_E,
+        .f => c.DOOM_KEY_F,
+        .g => c.DOOM_KEY_G,
+        .h => c.DOOM_KEY_H,
+        .i => c.DOOM_KEY_I,
+        .j => c.DOOM_KEY_J,
+        .k => c.DOOM_KEY_K,
+        .l => c.DOOM_KEY_L,
+        .m => c.DOOM_KEY_M,
+        .n => c.DOOM_KEY_N,
+        .o => c.DOOM_KEY_O,
+        .p => c.DOOM_KEY_P,
+        .q => c.DOOM_KEY_Q,
+        .r => c.DOOM_KEY_R,
+        .s => c.DOOM_KEY_S,
+        .t => c.DOOM_KEY_T,
+        .u => c.DOOM_KEY_U,
+        .v => c.DOOM_KEY_V,
+        .w => c.DOOM_KEY_W,
+        .x => c.DOOM_KEY_X,
+        .y => c.DOOM_KEY_Y,
+        .z => c.DOOM_KEY_Z,
+        .backspace => c.DOOM_KEY_BACKSPACE,
+        .left_control => c.DOOM_KEY_CTRL,
+        .right_control => c.DOOM_KEY_CTRL,
+        .left_arrow => c.DOOM_KEY_LEFT_ARROW,
+        .up_arrow => c.DOOM_KEY_UP_ARROW,
+        .right_arrow => c.DOOM_KEY_RIGHT_ARROW,
+        .down_arrow => c.DOOM_KEY_DOWN_ARROW,
+        .left_shift => c.DOOM_KEY_SHIFT,
+        .right_shift => c.DOOM_KEY_SHIFT,
+        .f1 => c.DOOM_KEY_F1,
+        .f2 => c.DOOM_KEY_F2,
+        .f3 => c.DOOM_KEY_F3,
+        .f4 => c.DOOM_KEY_F4,
+        .f5 => c.DOOM_KEY_F5,
+        .f6 => c.DOOM_KEY_F6,
+        .f7 => c.DOOM_KEY_F7,
+        .f8 => c.DOOM_KEY_F8,
+        .f9 => c.DOOM_KEY_F9,
+        .f10 => c.DOOM_KEY_F10,
+        .f11 => c.DOOM_KEY_F11,
+        .f12 => c.DOOM_KEY_F12,
+        .pause => c.DOOM_KEY_PAUSE,
+        else => null,
+    };
+}
+
+pub fn kbmKeyPress(
+    _: *@This(),
+    _: u64,
+    _: sorvi.kbm_v1.absolute_t,
+    _: sorvi.kbm_v1.modifiers_t,
+    code: sorvi.kbm_v1.scancode_t
+) !void {
+    if (toDoomKey(code)) |key| {
+        c.doom_key_down(key);
+    }
+}
+
+pub fn kbmKeyRelease(
+    _: *@This(),
+    _: u64,
+    _: sorvi.kbm_v1.absolute_t,
+    _: sorvi.kbm_v1.modifiers_t,
+    code: sorvi.kbm_v1.scancode_t
+) !void {
+    if (toDoomKey(code)) |key| {
+        c.doom_key_up(key);
+    }
+}
+
+fn toDoomButton(button: sorvi.kbm_v1.button_t) ?c.doom_button_t {
+    return switch (button) {
+        .left => c.DOOM_LEFT_BUTTON,
+        .right => c.DOOM_RIGHT_BUTTON,
+        .middle => c.DOOM_MIDDLE_BUTTON,
+        else => null,
+    };
+}
+
+pub fn kbmButtonPress(
+    _: *@This(),
+    _: u64,
+    _: sorvi.kbm_v1.absolute_t,
+    _: sorvi.kbm_v1.modifiers_t,
+    button: sorvi.kbm_v1.button_t
+) !void {
+    if (toDoomButton(button)) |btn| {
+        c.doom_button_down(btn);
+    }
+}
+
+pub fn kbmButtonRelease(
+    _: *@This(),
+    _: u64,
+    _: sorvi.kbm_v1.absolute_t,
+    _: sorvi.kbm_v1.modifiers_t,
+    button: sorvi.kbm_v1.button_t
+) !void {
+    if (toDoomButton(button)) |btn| {
+        c.doom_button_up(btn);
+    }
+}
+
+pub fn kbmMouseMotion(
+    _: *@This(),
+    _: u64,
+    _: sorvi.kbm_v1.absolute_t,
+    _: sorvi.kbm_v1.modifiers_t,
+    rel: sorvi.kbm_v1.relative_t,
+) !void {
+    // disable mouse as it would need pointer locking to be good
+    if (true) return;
+    const SCALE = 100.0;
+    c.doom_mouse_move(@intFromFloat(@round(rel.x * SCALE)), @intFromFloat(@round(rel.y * SCALE)));
+}
+
+pub fn kbmMouseScroll(
+    _: *@This(),
+    _: u64,
+    _: sorvi.kbm_v1.absolute_t,
+    _: sorvi.kbm_v1.modifiers_t,
+    _: sorvi.kbm_v1.relative_t,
+) !void {
 }
 
 pub fn resizeNearestRgbaToBgra(

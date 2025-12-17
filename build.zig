@@ -20,6 +20,7 @@ pub fn build(b: *std.Build) void {
             "core_v1",
             "mem_v1",
             "fs_v1",
+            "kbm_v1",
             "audio_v1",
             "video_v1",
             "raster_v1",
