@@ -24,14 +24,14 @@ comptime {
     });
 }
 
-// TODO: add mouse input
 // TODO: add midi support
 //       might be interesting to have sorvi api for midi as well :thinking:
 
 var MEMORY: [4096 * 4096]u8 = undefined;
 var fba: std.heap.FixedBufferAllocator = .init(&MEMORY);
+var doom_time: u64 = 0;
 
-accumulator: f64 = 0,
+ns_since_last_update: u64 = 0,
 
 fn doomPrint(msg_raw: [*:0]const u8) callconv(.c) void {
     const msg = std.mem.span(msg_raw);
@@ -119,6 +119,11 @@ fn doomEof(ptr: ?*anyopaque) callconv(.c) i32 {
     return @intFromBool(file.offset >= doom1.len);
 }
 
+fn doomGettime(out_sec: ?*i32, out_usec: ?*i32) callconv(.c) void {
+    out_sec.?.* = @intCast(doom_time / std.time.ns_per_s);
+    out_usec.?.* = @intCast((doom_time % std.time.ns_per_s) / std.time.ns_per_us);
+}
+
 fn doomExit(code: i32) callconv(.c) void {
     std.debug.panic("exit with code: {}", .{code});
 }
@@ -134,10 +139,11 @@ pub fn init(_: *@This()) !void {
         }
     }
 
-    try sorvi.audio_v1.init(.{
+    _ = try sorvi.audio_v1.init(.{
         .format = .s16le,
         .layout = .stereo,
         .sample_rate = c.DOOM_SAMPLERATE,
+        .buffer_size = 512,
     });
 
     const argv: []const [*:0]const u8 = &.{"sorvi-doom"};
@@ -145,6 +151,7 @@ pub fn init(_: *@This()) !void {
     c.doom_set_malloc(&doomMalloc, &doomFree);
     c.doom_set_getenv(@ptrCast(&doomGetEnv));
     c.doom_set_file_io(@ptrCast(&doomOpen), &doomClose, &doomRead, &doomWrite, &doomSeek, &doomTell, &doomEof);
+    c.doom_set_gettime(&doomGettime);
     c.doom_set_exit(&doomExit);
     c.doom_init(argv.len, @constCast(@ptrCast(argv.ptr)), 0);
 
@@ -331,8 +338,7 @@ pub fn resizeNearestRgbaToBgra(
             const src_index = (sy * sw + sx) * 4;
             const dst_index = (dy * dw + dx) * 4;
             const rgba: @Vector(4, u8) = @bitCast(src[src_index..][0..4].*);
-            const argb: [4]u8 = @bitCast(@shuffle(u8, rgba, undefined, [_]i32{ 2, 1, 0, 3 }));
-            @memcpy(dst[dst_index..][0..4], &argb);
+            dst[dst_index..][0..4].* = @bitCast(@shuffle(u8, rgba, undefined, [_]i32{ 2, 1, 0, 3 }));
         }
     }
 }
@@ -342,20 +348,24 @@ pub fn resizeNearestRgbaToBgra(
 extern fn doom_force_update() callconv(.c) void;
 extern fn doom_get_sound_buffer() callconv(.c) [*]i16;
 
-pub fn videoTick(self: *@This(), frame: sorvi.video_v1.frame_t) !void {
-    const dt: f64 = 1.0 / 35.0;
-    const delta: f64 = @as(f64, @floatFromInt(frame.time_ns)) / std.time.ns_per_s;
-    self.accumulator += delta;
-    if (self.accumulator < dt) return;
-    while (self.accumulator >= dt) {
+pub fn videoTick(self: *@This(), frame: sorvi.video_v1.frame_t) !u64 {
+    const target_rate: u64 = std.time.ns_per_s / 35;
+    doom_time += frame.time_ns;
+    self.ns_since_last_update += frame.time_ns;
+    if (target_rate > self.ns_since_last_update) {
+        // Frontend scheduled us too fast
+        return target_rate - self.ns_since_last_update;
+    }
+    while (self.ns_since_last_update >= target_rate) {
         doom_force_update();
-        self.accumulator -= dt;
+        self.ns_since_last_update -= target_rate;
     }
     const buffer = try sorvi.raster_v1.acquire_buffer();
     const doom_len = DOOM_WIDTH * DOOM_HEIGHT * 4;
     const doom_pixels = c.doom_get_framebuffer(4)[0..doom_len];
     resizeNearestRgbaToBgra(doom_pixels, buffer.ptr[0..buffer.len], DOOM_WIDTH, DOOM_HEIGHT, frame.w, frame.h);
     sorvi.raster_v1.damage(&.{.{.x = 0, .y = 0, .w = frame.w, .h = frame.h}});
+    return target_rate - self.ns_since_last_update;
 }
 
 pub fn audioTick(_: *@This(), u8_buffer: []u8) !void {
