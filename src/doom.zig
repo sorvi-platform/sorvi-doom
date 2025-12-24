@@ -32,6 +32,8 @@ var fba: std.heap.FixedBufferAllocator = .init(&MEMORY);
 var doom_time: u64 = 0;
 
 ns_since_last_update: u64 = 0,
+mouse_motion: sorvi.kbm_v1.relative_t = .{ .x = 0, .y = 0 },
+mouse_locked: bool = false,
 
 fn doomPrint(msg_raw: [*:0]const u8) callconv(.c) void {
     const msg = std.mem.span(msg_raw);
@@ -146,6 +148,13 @@ pub fn init(_: *@This()) !void {
         .buffer_size = 512,
     });
 
+    c.doom_set_default_int("key_up", c.DOOM_KEY_W);
+    c.doom_set_default_int("key_down", c.DOOM_KEY_S);
+    c.doom_set_default_int("key_strafeleft", c.DOOM_KEY_A);
+    c.doom_set_default_int("key_straferight", c.DOOM_KEY_D);
+    c.doom_set_default_int("key_use", c.DOOM_KEY_E);
+    c.doom_set_default_int("mouse_move", 0);
+
     const argv: []const [*:0]const u8 = &.{"sorvi-doom"};
     c.doom_set_print(@ptrCast(&doomPrint));
     c.doom_set_malloc(&doomMalloc, &doomFree);
@@ -158,8 +167,7 @@ pub fn init(_: *@This()) !void {
     try sorvi.audio_v1.cmd(.@"resume");
 }
 
-pub fn deinit(_: *@This()) void {
-}
+pub fn deinit(_: *@This()) void {}
 
 fn toDoomKey(code: sorvi.kbm_v1.scancode_t) ?c.doom_key_t {
     return switch (code) {
@@ -273,12 +281,14 @@ fn toDoomButton(button: sorvi.kbm_v1.button_t) ?c.doom_button_t {
 }
 
 pub fn kbmButtonPress(
-    _: *@This(),
+    self: *@This(),
     _: u64,
     _: sorvi.kbm_v1.absolute_t,
     _: sorvi.kbm_v1.modifiers_t,
     button: sorvi.kbm_v1.button_t
 ) !void {
+    sorvi.kbm_v1.lock_pointer();
+    self.mouse_locked = true;
     if (toDoomButton(button)) |btn| {
         c.doom_button_down(btn);
     }
@@ -297,16 +307,15 @@ pub fn kbmButtonRelease(
 }
 
 pub fn kbmMouseMotion(
-    _: *@This(),
+    self: *@This(),
     _: u64,
     _: sorvi.kbm_v1.absolute_t,
     _: sorvi.kbm_v1.modifiers_t,
     rel: sorvi.kbm_v1.relative_t,
 ) !void {
-    // disable mouse as it would need pointer locking to be good
-    if (true) return;
-    const SCALE = 100.0;
-    c.doom_mouse_move(@intFromFloat(@round(rel.x * SCALE)), @intFromFloat(@round(rel.y * SCALE)));
+    if (!self.mouse_locked) return;
+    self.mouse_motion.x += rel.x;
+    self.mouse_motion.y += rel.y;
 }
 
 pub fn kbmMouseScroll(
@@ -351,15 +360,22 @@ extern fn doom_get_sound_buffer() callconv(.c) [*]i16;
 pub fn videoTick(self: *@This(), frame: sorvi.video_v1.frame_t) !u64 {
     const target_rate: u64 = std.time.ns_per_s / 35;
     doom_time += frame.time_ns;
+
     self.ns_since_last_update += frame.time_ns;
     if (target_rate > self.ns_since_last_update) {
         // Frontend scheduled us too fast
         return target_rate - self.ns_since_last_update;
     }
+
+    const SCALE = 3.0;
+    c.doom_mouse_move(@intFromFloat(@round(self.mouse_motion.x * SCALE)), @intFromFloat(@round(self.mouse_motion.y * SCALE)));
+    self.mouse_motion = .{ .x = 0, .y = 0 };
+
     while (self.ns_since_last_update >= target_rate) {
         doom_force_update();
         self.ns_since_last_update -= target_rate;
     }
+
     const buffer = try sorvi.raster_v1.acquire_buffer();
     const doom_len = DOOM_WIDTH * DOOM_HEIGHT * 4;
     const doom_pixels = c.doom_get_framebuffer(4)[0..doom_len];
