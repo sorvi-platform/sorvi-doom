@@ -34,6 +34,7 @@ var doom_time: u64 = 0;
 ns_since_last_update: u64 = 0,
 mouse_motion: sorvi.kbm_v1.relative_t = .{ .x = 0, .y = 0 },
 mouse_locked: bool = false,
+fullscreen: bool = false,
 
 fn doomPrint(msg_raw: [*:0]const u8) callconv(.c) void {
     const msg = std.mem.span(msg_raw);
@@ -126,20 +127,30 @@ fn doomGettime(out_sec: ?*i32, out_usec: ?*i32) callconv(.c) void {
     out_usec.?.* = @intCast((doom_time % std.time.ns_per_s) / std.time.ns_per_us);
 }
 
-fn doomExit(code: i32) callconv(.c) void {
-    std.debug.panic("exit with code: {}", .{code});
+fn doomExit(_: i32) callconv(.c) void {
+    sorvi.core_v1.exit();
 }
 
 const DOOM_WIDTH = 320;
 const DOOM_HEIGHT = 200;
 
 pub fn init(_: *@This()) !void {
-    for (sorvi.raster_v1.query_configuration()) |cfg| {
-        if (cfg.format == .argb8888 or cfg.format == .xrgb8888) {
-            try sorvi.raster_v1.init(cfg);
-            break;
-        }
-    }
+    try sorvi.raster_v1.init(.{
+        .format = .xbgr8888,
+    }, &.{
+        .w = DOOM_WIDTH,
+        .h = DOOM_HEIGHT,
+        .scale = .integer,
+        .filter = .nearest,
+    });
+
+    try sorvi.video_v1.configure(.{
+        .w = DOOM_WIDTH * 2,
+        .h = DOOM_HEIGHT * 2,
+        .flags = .{ .border = true },
+        .presentation = .dont_care,
+        .mode = .default,
+    });
 
     _ = try sorvi.audio_v1.init(.{
         .format = .s16le,
@@ -154,6 +165,7 @@ pub fn init(_: *@This()) !void {
     c.doom_set_default_int("key_straferight", c.DOOM_KEY_D);
     c.doom_set_default_int("key_use", c.DOOM_KEY_E);
     c.doom_set_default_int("mouse_move", 0);
+    c.doom_set_default_int("screenblocks", 10);
 
     const argv: []const [*:0]const u8 = &.{"sorvi-doom"};
     c.doom_set_print(@ptrCast(&doomPrint));
@@ -248,7 +260,7 @@ fn toDoomKey(code: sorvi.kbm_v1.scancode_t) ?c.doom_key_t {
 }
 
 pub fn kbmKeyPress(
-    _: *@This(),
+    self: *@This(),
     _: u64,
     _: sorvi.kbm_v1.absolute_t,
     _: sorvi.kbm_v1.modifiers_t,
@@ -256,6 +268,33 @@ pub fn kbmKeyPress(
 ) !void {
     if (toDoomKey(code)) |key| {
         c.doom_key_down(key);
+    }
+    switch (code) {
+        .escape => {
+            sorvi.kbm_v1.unlock_pointer();
+            self.mouse_locked = false;
+        },
+        .f12 => {
+            self.fullscreen = !self.fullscreen;
+            if (self.fullscreen) {
+                try sorvi.video_v1.configure(.{
+                    .w = DOOM_WIDTH * 2,
+                    .h = DOOM_HEIGHT * 2,
+                    .flags = .{ .border = false },
+                    .presentation = .fullscreen,
+                    .mode = .default,
+                });
+            } else {
+                try sorvi.video_v1.configure(.{
+                    .w = DOOM_WIDTH * 2,
+                    .h = DOOM_HEIGHT * 2,
+                    .flags = .{ .border = true },
+                    .presentation = .dont_care,
+                    .mode = .default,
+                });
+            }
+        },
+        else => {},
     }
 }
 
@@ -327,37 +366,13 @@ pub fn kbmMouseScroll(
 ) !void {
 }
 
-pub fn resizeNearestRgbaToBgra(
-    src: []const u8,
-    dst: []u8,
-    sw: usize,
-    sh: usize,
-    dw: usize,
-    dh: usize,
-) void {
-    // TODO: vectorize this more
-    const x_ratio = @as(f32, @floatFromInt(sw)) / @as(f32, @floatFromInt(dw));
-    const y_ratio = @as(f32, @floatFromInt(sh)) / @as(f32, @floatFromInt(dh));
-    for (0..dh) |dy| {
-        const syf: usize = @intFromFloat(@floor(@as(f32, @floatFromInt(dy)) * y_ratio));
-        const sy = @min(syf, sh - 1);
-        for (0..dw) |dx| {
-            const sxf: usize = @intFromFloat(@floor(@as(f32, @floatFromInt(dx)) * x_ratio));
-            const sx = @min(sxf, sw - 1);
-            const src_index = (sy * sw + sx) * 4;
-            const dst_index = (dy * dw + dx) * 4;
-            const rgba: @Vector(4, u8) = @bitCast(src[src_index..][0..4].*);
-            dst[dst_index..][0..4].* = @bitCast(@shuffle(u8, rgba, undefined, [_]i32{ 2, 1, 0, 3 }));
-        }
-    }
-}
-
 // the puredoom author does not know that foo() translates to foo(i32)
 // while using `c.doom_force_update` works on native, wasm is more strict
 extern fn doom_force_update() callconv(.c) void;
 extern fn doom_get_sound_buffer() callconv(.c) [*]i16;
 
 pub fn videoTick(self: *@This(), frame: sorvi.video_v1.frame_t) !u64 {
+    std.debug.assert(frame.w == DOOM_WIDTH and frame.h == DOOM_HEIGHT);
     const target_rate: u64 = std.time.ns_per_s / 35;
     doom_time += frame.time_ns;
 
@@ -379,7 +394,7 @@ pub fn videoTick(self: *@This(), frame: sorvi.video_v1.frame_t) !u64 {
     const buffer = try sorvi.raster_v1.acquire_buffer();
     const doom_len = DOOM_WIDTH * DOOM_HEIGHT * 4;
     const doom_pixels = c.doom_get_framebuffer(4)[0..doom_len];
-    resizeNearestRgbaToBgra(doom_pixels, buffer.ptr[0..buffer.len], DOOM_WIDTH, DOOM_HEIGHT, frame.w, frame.h);
+    @memcpy(buffer, doom_pixels);
     sorvi.raster_v1.damage(&.{.{.x = 0, .y = 0, .w = frame.w, .h = frame.h}});
     return target_rate - self.ns_since_last_update;
 }
