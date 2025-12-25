@@ -137,11 +137,13 @@ const DOOM_HEIGHT = 200;
 pub fn init(_: *@This()) !void {
     try sorvi.raster_v1.init(.{
         .format = .xbgr8888,
-    }, &.{
-        .w = DOOM_WIDTH,
-        .h = DOOM_HEIGHT,
-        .scale = .integer,
-        .filter = .nearest,
+        .scaling = &.{
+            .raster_w = DOOM_WIDTH,
+            .raster_h = DOOM_HEIGHT,
+            .scale = .integer,
+            .filter = .nearest,
+        },
+        .direct = false,
     });
 
     try sorvi.video_v1.configure(.{
