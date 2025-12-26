@@ -38,7 +38,7 @@ fullscreen: bool = false,
 
 fn doomPrint(msg_raw: [*:0]const u8) callconv(.c) void {
     const msg = std.mem.span(msg_raw);
-    _ = sorvi.fs_v1.writev(.tty, &.{.{.ptr = msg.ptr, .len = msg.len}}) catch {};
+    sorvi.core_v1.tty_writev(&.{.{.ptr = msg.ptr, .len = msg.len}});
 }
 
 fn doomMalloc(size: i32) callconv(.c) ?*anyopaque {
