@@ -328,10 +328,15 @@ pub fn kbmButtonPress(
     _: sorvi.kbm_v1.modifiers_t,
     button: sorvi.kbm_v1.button_t
 ) !void {
-    sorvi.kbm_v1.lock_pointer();
-    self.mouse_locked = true;
-    if (toDoomButton(button)) |btn| {
-        c.doom_button_down(btn);
+    if (!self.mouse_locked) {
+        sorvi.kbm_v1.lock_pointer();
+        self.mouse_locked = true;
+        // do not send the button to doom unless we are locked
+        // this prevents accidental firing
+    } else {
+        if (toDoomButton(button)) |btn| {
+            c.doom_button_down(btn);
+        }
     }
 }
 
