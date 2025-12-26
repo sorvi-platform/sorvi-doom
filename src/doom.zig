@@ -159,6 +159,7 @@ pub fn init(_: *@This()) !void {
         .layout = .stereo,
         .sample_rate = c.DOOM_SAMPLERATE,
         .buffer_size = 512,
+        .direct = false,
     });
 
     c.doom_set_default_int("key_up", c.DOOM_KEY_W);
