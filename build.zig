@@ -9,10 +9,9 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    const generator = sorvi_dep.artifact("sorvi-api-gen");
     const frontend = sorvi_dep.artifact("sorvi-frontend");
 
-    const sorvi_api = sorvi.createSorviAPI(b, generator, .{
+    const sorvi_api = sorvi.createSorviAPI(b, .{
         .target = target,
         .api = .core,
         .extensions = &.{
@@ -41,7 +40,6 @@ pub fn build(b: *std.Build) void {
             const mod = b.createModule(.{
                 .target = sorvi_target,
                 .optimize = optimize,
-                .pic = true,
                 .link_libc = false,
                 .sanitize_c = .off,
             });
@@ -65,17 +63,20 @@ pub fn build(b: *std.Build) void {
 
     const doom = sorvi.addSorviCore(b, .{
         .name = "doom",
-        .root_source_file = b.path("src/doom.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "sorvi", .module = sorvi_api },
-            .{ .name = "puredoom", .module = puredoom },
-        },
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/doom.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "sorvi", .module = sorvi_api },
+                .{ .name = "puredoom", .module = puredoom },
+            },
+        }),
     });
-    doom.module.addAnonymousImport("doom1.wad", .{
+    doom.root_module.addAnonymousImport("doom1.wad", .{
         .root_source_file = puredoom_dep.path("doom1.wad"),
     });
+    doom.fixup(b);
 
     const step = b.step("run", "Run doom in a reference frontend");
     step.dependOn(&sorvi.addRunSorviCore(b, frontend, doom).step);
