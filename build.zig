@@ -44,8 +44,8 @@ pub fn build(b: *std.Build) void {
                 .sanitize_c = .off,
             });
             mod.addCSourceFiles(.{
-                .files = &.{ "puredoom.c" },
-                .flags = &.{ "-O0" }, // optimizations break rendering
+                .files = &.{"puredoom.c"},
+                .flags = &.{"-O0"}, // optimizations break rendering
                 .root = puredoom_src.dirname(),
             });
             mod.addIncludePath(puredoom_dep.path(""));
