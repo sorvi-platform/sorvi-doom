@@ -134,7 +134,7 @@ fn doomExit(_: i32) callconv(.c) void {
 const DOOM_WIDTH = 320;
 const DOOM_HEIGHT = 200;
 
-pub fn init(_: *@This()) !void {
+pub fn core_v1_init(_: *@This()) !void {
     try sorvi.raster_v1.init(.{
         .format = .xbgr8888,
         .scaling = &.{
@@ -182,7 +182,7 @@ pub fn init(_: *@This()) !void {
     try sorvi.audio_v1.cmd(.@"resume");
 }
 
-pub fn deinit(_: *@This()) void {}
+pub fn core_v1_deinit(_: *@This()) void {}
 
 fn toDoomKey(code: sorvi.kbm_v1.scancode_t) ?c.doom_key_t {
     return switch (code) {
@@ -262,7 +262,7 @@ fn toDoomKey(code: sorvi.kbm_v1.scancode_t) ?c.doom_key_t {
     };
 }
 
-pub fn kbmKeyPress(self: *@This(), _: u64, _: sorvi.kbm_v1.absolute_t, _: sorvi.kbm_v1.modifiers_t, code: sorvi.kbm_v1.scancode_t) !void {
+pub fn kbm_v1_key_press(self: *@This(), _: u64, _: sorvi.kbm_v1.absolute_t, _: sorvi.kbm_v1.modifiers_t, code: sorvi.kbm_v1.scancode_t) !void {
     if (toDoomKey(code)) |key| {
         c.doom_key_down(key);
     }
@@ -295,7 +295,7 @@ pub fn kbmKeyPress(self: *@This(), _: u64, _: sorvi.kbm_v1.absolute_t, _: sorvi.
     }
 }
 
-pub fn kbmKeyRelease(_: *@This(), _: u64, _: sorvi.kbm_v1.absolute_t, _: sorvi.kbm_v1.modifiers_t, code: sorvi.kbm_v1.scancode_t) !void {
+pub fn kbm_v1_key_release(_: *@This(), _: u64, _: sorvi.kbm_v1.absolute_t, _: sorvi.kbm_v1.modifiers_t, code: sorvi.kbm_v1.scancode_t) !void {
     if (toDoomKey(code)) |key| {
         c.doom_key_up(key);
     }
@@ -310,7 +310,7 @@ fn toDoomButton(button: sorvi.kbm_v1.button_t) ?c.doom_button_t {
     };
 }
 
-pub fn kbmButtonPress(self: *@This(), _: u64, _: sorvi.kbm_v1.absolute_t, _: sorvi.kbm_v1.modifiers_t, button: sorvi.kbm_v1.button_t) !void {
+pub fn kbm_v1_button_press(self: *@This(), _: u64, _: sorvi.kbm_v1.absolute_t, _: sorvi.kbm_v1.modifiers_t, button: sorvi.kbm_v1.button_t) !void {
     if (!self.mouse_locked) {
         sorvi.kbm_v1.lock_pointer();
         self.mouse_locked = true;
@@ -323,13 +323,13 @@ pub fn kbmButtonPress(self: *@This(), _: u64, _: sorvi.kbm_v1.absolute_t, _: sor
     }
 }
 
-pub fn kbmButtonRelease(_: *@This(), _: u64, _: sorvi.kbm_v1.absolute_t, _: sorvi.kbm_v1.modifiers_t, button: sorvi.kbm_v1.button_t) !void {
+pub fn kbm_v1_button_release(_: *@This(), _: u64, _: sorvi.kbm_v1.absolute_t, _: sorvi.kbm_v1.modifiers_t, button: sorvi.kbm_v1.button_t) !void {
     if (toDoomButton(button)) |btn| {
         c.doom_button_up(btn);
     }
 }
 
-pub fn kbmMouseMotion(
+pub fn kbm_v1_mouse_motion(
     self: *@This(),
     _: u64,
     _: sorvi.kbm_v1.absolute_t,
@@ -341,7 +341,7 @@ pub fn kbmMouseMotion(
     self.mouse_motion.y += rel.y;
 }
 
-pub fn kbmMouseScroll(
+pub fn kbm_v1_mouse_scroll(
     _: *@This(),
     _: u64,
     _: sorvi.kbm_v1.absolute_t,
@@ -354,7 +354,7 @@ pub fn kbmMouseScroll(
 extern fn doom_force_update() callconv(.c) void;
 extern fn doom_get_sound_buffer() callconv(.c) [*]i16;
 
-pub fn videoTick(self: *@This(), frame: sorvi.video_v1.frame_t) !u64 {
+pub fn video_v1_tick(self: *@This(), frame: sorvi.video_v1.frame_t) !u64 {
     std.debug.assert(frame.w == DOOM_WIDTH and frame.h == DOOM_HEIGHT);
     const target_rate: u64 = std.time.ns_per_s / 35;
     doom_time += frame.time_ns;
@@ -382,7 +382,9 @@ pub fn videoTick(self: *@This(), frame: sorvi.video_v1.frame_t) !u64 {
     return target_rate - self.ns_since_last_update;
 }
 
-pub fn audioTick(_: *@This(), u8_buffer: []u8) !void {
+pub fn video_v1_configuration(_: *@This(), _: sorvi.video_v1.configuration_t, _: u16, _: u16) void {}
+
+pub fn audio_v1_tick(_: *@This(), u8_buffer: []u8) !void {
     const s16_buffer = std.mem.bytesAsSlice(i16, u8_buffer);
     const doom_buffer: []i16 = doom_get_sound_buffer()[0..1024];
     const min_len = @min(s16_buffer.len, doom_buffer.len);
