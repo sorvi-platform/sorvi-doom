@@ -64,6 +64,7 @@ pub fn build(b: *std.Build) void {
         .name = "doom",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/doom.zig"),
+            .single_threaded = true,
             .target = target,
             .optimize = optimize,
             .imports = &.{
